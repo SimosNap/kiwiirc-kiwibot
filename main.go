@@ -3,47 +3,43 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/go-redis/redis"
-	"github.com/thoj/go-ircevent"
 	"regexp"
 	"time"
+
+	"github.com/go-redis/redis"
+	"github.com/itsonlybinary/kiwiirc-previewbot/pkg/previewbot"
+	"github.com/thoj/go-ircevent"
 )
 
-// Config
-var ircNick = "PreviewBot"
-var ircName = "PreviewBot"
-var ircServer = "chat.freenode.net:6697"
-var ircTLS = true
-var ircChannels = []string{"#kiwiirc"}
-var ircDebug = false
-var ircVerbose = false
-
-var redisServer = "127.0.0.1:6379"
-var redisPassword = ""
-var redisDB = 0
+var botConf previewbot.IrcBot
+var redisConf previewbot.Redis
 
 func main() {
-	irccon := irc.IRC(ircNick, ircName)
-	irccon.VerboseCallbackHandler = ircVerbose
-	irccon.Debug = ircDebug
-	irccon.UseTLS = ircTLS
+	previewbot.LoadConfig()
+	botConf = previewbot.GetBotConf()
+	redisConf = previewbot.GetRedisConf()
+
+	irccon := irc.IRC(botConf.Nick, botConf.Name)
+	irccon.VerboseCallbackHandler = botConf.Verbose
+	irccon.Debug = botConf.Debug
+	irccon.UseTLS = botConf.Tls
 
 	irccon.AddCallback("001", func(e *irc.Event) {
-		for _, channel := range ircChannels {
+		for _, channel := range botConf.Channels {
 			irccon.Join(channel)
 		}
 	})
 
-	err := irccon.Connect(ircServer)
+	err := irccon.Connect(botConf.Server)
 	if err != nil {
 		fmt.Printf("Err %s", err)
 		return
 	}
 
 	rclient := redis.NewClient(&redis.Options{
-		Addr:     redisServer,
-		Password: redisPassword,
-		DB:       redisDB,
+		Addr:     redisConf.Server,
+		Password: redisConf.Password,
+		DB:       redisConf.Database,
 	})
 
 	go redisstart(rclient, irccon)
@@ -70,15 +66,15 @@ func builderMessage(irccon *irc.Connection, jsonMessage map[string]interface{}) 
 
 				if jsonData["build_success"] == "1" {
 					out = fmt.Sprintf(
-						"Preivew of %v is now availiable here: %v",
+						"Preview of %v is now available here: %v",
 						jsonData["tidy_ref"],
-						buildUrl("preview", jsonData),
+						buildURL("preview", jsonData),
 					)
 				} else {
 					out = fmt.Sprintf(
 						"Preivew of %v failed to build successfully. log: %v",
 						jsonData["tidy_ref"],
-						buildUrl("log", jsonData),
+						buildURL("log", jsonData),
 					)
 				}
 
@@ -86,17 +82,17 @@ func builderMessage(irccon *irc.Connection, jsonMessage map[string]interface{}) 
 				if jsonData["title"] != nil && jsonData["title"] != "" {
 					out += fmt.Sprintf(" - %v", jsonData["title"])
 				}
-                
-                for _, channel := range ircChannels {
-                    irccon.Privmsg(channel, out)
-                }
+
+				for _, channel := range botConf.Channels {
+					irccon.Privmsg(channel, out)
+				}
 			}
 
 		}
 	}
 }
 
-func buildUrl(urlType string, jsonData map[string]interface{}) string {
+func buildURL(urlType string, jsonData map[string]interface{}) string {
 	var tidyRef, url string
 	reg, _ := regexp.Compile("^pull/(\\d+)$")
 	repoRef := fmt.Sprint(jsonData["repo_ref"])
@@ -130,7 +126,8 @@ func redisstart(rclient *redis.Client, irccon *irc.Connection) {
 
 	_, err := pubsub.ReceiveTimeout(time.Second)
 	if err != nil {
-		panic(err)
+		fmt.Println(err)
+		return
 	}
 
 	for {
