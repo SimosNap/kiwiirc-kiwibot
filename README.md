@@ -1,1 +1,1 @@
-# kiwiirc-previewbot
+# kiwiirc-kiwibot
