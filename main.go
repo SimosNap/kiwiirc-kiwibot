@@ -19,7 +19,7 @@ func main() {
 	go kiwibot.RedisStart()
 
 	// Start the webhook listener
-	kiwibot.StartWebook()
+	kiwibot.WebhookStart()
 
 	// Loop the ircbot
 	kiwibot.BotLoop()
