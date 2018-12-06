@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 
-	"github.com/itsonlybinary/kiwiirc-kiwibot/pkg/kiwibot"
+	"github.com/SimosNap/kiwiirc-kiwibot/pkg/kiwibot"
 )
 
 func main() {
